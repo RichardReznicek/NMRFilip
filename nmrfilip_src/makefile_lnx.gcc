@@ -1,0 +1,113 @@
+#~ NMRFilip LIB - the NMR data processing software - core library
+#~ NMRFilip CLI - the NMR data processing software - command line interface
+#~ Copyright (C) 2010, 2011, 2020 Richard Reznicek
+
+#~ This program is free software; you can redistribute it and/or
+#~ modify it under the terms of the GNU General Public License
+#~ as published by the Free Software Foundation; either version 2
+#~ of the License, or (at your option) any later version.
+
+#~ This program is distributed in the hope that it will be useful,
+#~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+#~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#~ GNU General Public License for more details.
+
+#~ You should have received a copy of the GNU General Public License
+#~ along with this program; if not, write to the Free Software
+#~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+BUILD ?= debug
+CFG ?= 
+DIGITAL_FILTER ?= 1
+
+### Adjust the install path if necessary: 
+LIB_INST_PATH ?= /usr/local/lib
+BIN_INST_PATH ?= /usr/local/bin
+
+CDEPS = -MT$@ -MF$@.d -MD -MP
+
+LIBS = -lm -lfftw3
+
+CC = gcc
+
+NMRFILIP_CFLAGS = -DDIGITAL_FILTER=$(DIGITAL_FILTER) -I. $(CDEPS)
+
+ifeq ($(BUILD),debug)
+NMRFILIP_CFLAGS += -g3 -O0 -Wall
+OBJS = gcc_lnxd$(CFG)
+STRIP_FLAG = 
+endif
+ifeq ($(BUILD),release)
+NMRFILIP_CFLAGS += -O3 -Wall -ffast-math -fno-finite-math-only
+OBJS = gcc_lnx$(CFG)
+STRIP_FLAG = -s
+endif
+
+NMRFILIP_OBJECTS =  \
+	$(OBJS)/nmrfilip.lo \
+	$(OBJS)/nfio.lo \
+	$(OBJS)/nfulist.lo \
+	$(OBJS)/nfload.lo \
+	$(OBJS)/nfproc.lo \
+	$(OBJS)/nfexport.lo
+
+
+all: $(OBJS)
+$(OBJS):
+	-mkdir $(OBJS)
+
+all: 	$(OBJS)/libnmrfilip.la
+
+all: 	$(OBJS)/nmrfilipcli
+
+clean: 
+	-rm -r $(OBJS)
+#	-rm $(OBJS)/*.o
+#	-rm $(OBJS)/*.d
+#	-rm $(OBJS)/nmrfilipcli
+#	-rm $(OBJS)/libnmrfilip.so
+
+install:
+	install -c -d $(LIB_INST_PATH)
+	libtool --mode=install install -c $(OBJS)/libnmrfilip.la $(LIB_INST_PATH)
+	install -c -d $(BIN_INST_PATH)
+	libtool --mode=install install -c $(OBJS)/nmrfilipcli $(BIN_INST_PATH)
+
+uninstall:
+	libtool --mode=uninstall rm $(BIN_INST_PATH)/nmrfilipcli
+	libtool --mode=uninstall rm $(LIB_INST_PATH)/libnmrfilip.la
+
+
+$(OBJS)/libnmrfilip.la: $(NMRFILIP_OBJECTS)
+	libtool --mode=link $(CC) -o $@ -shared $^ -rpath $(LIB_INST_PATH) -version-info 0:0:0 $(LIBS) $(STRIP_FLAG)
+
+$(OBJS)/nmrfilipcli: $(OBJS)/nmrfilipcli.o $(OBJS)/libnmrfilip.la
+	libtool --mode=link $(CC) -o $@ $< $(OBJS)/libnmrfilip.la $(STRIP_FLAG)
+
+
+$(OBJS)/nmrfilip.lo: nmrfilip.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfio.lo: nfio.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfulist.lo: nfulist.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfload.lo: nfload.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfproc.lo: nfproc.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfexport.lo: nfexport.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+
+$(OBJS)/nmrfilipcli.o: nmrfilipcli.c
+	libtool --mode=compile $(CC) -c -o $@ $(NMRFILIP_CFLAGS) $<
+
+
+.PHONY: all clean install uninstall
+
+-include $(OBJS)/*.d

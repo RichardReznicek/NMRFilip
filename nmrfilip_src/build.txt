@@ -1,0 +1,36 @@
+Before building the software, make sure that the FFTW library version 3 is available in a location where linker can find it. 
+On unix-like systems, it is strongly recommended to pass the "--enable-shared" and "--with-pic" options to the configure script when building the FFTW library. See the FFTW library documentation for detailed installation instructions.
+
+Provided makefiles are intended for use with the GNU make for compilation with the GCC (or the MinGW on Windows). The experimental support for handling the group delay caused by digital DSP filter can be disabled during the compilation by specifying: DIGITAL_FILTER = 0 
+
+
+Building on unix-like systems
+=============================
+
+Building release version:
+	make -f makefile_lnx.gcc BUILD=release
+
+Installation (as root):
+	make -f makefile_lnx.gcc BUILD=release install
+
+Uninstallation (as root):
+	make -f makefile_lnx.gcc BUILD=release uninstall
+
+
+Building debug version:
+	make -f makefile_lnx.gcc BUILD=debug
+
+
+* On some platforms, you may need to use "gmake" command instead of "make" in order to call the GNU make.
+* Install path is /usr/local/lib for the NMRFilip LIB and /usr/local/bin for the NMRFilip CLI, you may change it in the "makefile_lnx.gcc" if necessary.
+* In some cases, it might be necessary to run ldconfig (as root) after installation. Make sure that the path where the NMRFilip LIB library is installed is processed by ldconfig.
+
+
+Building on Windows
+===================
+
+Building release version:
+	mingw32-make -f makefile_win.gcc BUILD=release
+
+Building debug version:
+	mingw32-make -f makefile_win.gcc BUILD=debug

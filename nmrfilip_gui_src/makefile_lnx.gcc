@@ -1,0 +1,114 @@
+#~ NMRFilip GUI - the NMR data processing software - graphical user interface
+#~ Copyright (C) 2010, 2020 Richard Reznicek
+
+#~ This program is free software; you can redistribute it and/or
+#~ modify it under the terms of the GNU General Public License
+#~ as published by the Free Software Foundation; either version 2
+#~ of the License, or (at your option) any later version.
+
+#~ This program is distributed in the hope that it will be useful,
+#~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+#~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#~ GNU General Public License for more details.
+
+#~ You should have received a copy of the GNU General Public License
+#~ along with this program; if not, write to the Free Software
+#~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+BUILD ?= debug
+
+### Override this if you want to use precompiled headers:
+WITH_PCH ?= 0
+
+### Adjust the install path if necessary: 
+BIN_INST_PATH ?= /usr/local/bin
+
+CXX = `wx-config --cxx`
+
+CPPDEPS = -MT$@ -MF$@.d -MD -MP
+
+TKIT = $(shell wx-config --query-toolkit)
+ifeq ($(shell wx-config --query-chartype),unicode)
+UNIC = u
+endif
+
+ifeq ($(BUILD),release)
+OBJS = gcc_$(TKIT)$(UNIC)
+LIBS = `wx-config --libs --debug=no`
+LDFLAGS = `wx-config --linkdeps --debug=no`
+NMRFILIPGUI_CXXFLAGS = `wx-config --cxxflags --debug=no` $(__PCHFLAGS) -Wall -Wno-ctor-dtor-privacy -Wno-write-strings -I. -D__STDC_LIMIT_MACROS -O3 -ffast-math -fno-finite-math-only
+STRIP_FLAG = -s
+endif
+
+ifeq ($(BUILD),debug)
+OBJS = gcc_$(TKIT)$(UNIC)d
+LIBS = `wx-config --libs --debug=yes`
+LDFLAGS = `wx-config --linkdeps --debug=yes`
+NMRFILIPGUI_CXXFLAGS = `wx-config --cxxflags --debug=yes` $(__PCHFLAGS) -Wall -Wno-ctor-dtor-privacy -Wno-write-strings -I. -D__STDC_LIMIT_MACROS -O0 -g
+STRIP_FLAG = 
+endif
+
+ifeq ($(WITH_PCH),0)
+__PCHFLAGS = -DNOPCH
+__PCHINCLUDE = 
+__PCHPREREQ = 
+endif
+ifeq ($(WITH_PCH),1)
+__PCHFLAGS =  -DUSE_PCH -Winvalid-pch
+__PCHINCLUDE = -include $(OBJS)/all.h
+__PCHPREREQ = $(OBJS)/all.h.gch
+endif
+
+NMRFILIPGUI_OBJECTS =  \
+	$(OBJS)/nmrfilipgui.o \
+	$(OBJS)/nmrdata.o \
+	$(OBJS)/doc.o \
+	$(OBJS)/view.o \
+	$(OBJS)/validators.o \
+	$(OBJS)/panelmain.o \
+	$(OBJS)/panelproc.o \
+	$(OBJS)/panels.o \
+	$(OBJS)/userlist.o \
+	$(OBJS)/plotgen.o \
+	$(OBJS)/plotimp.o \
+	$(OBJS)/plotwin.o \
+	$(OBJS)/print.o \
+	$(OBJS)/nfgps.o \
+	$(OBJS)/infopanel.o \
+	$(OBJS)/artpr.o
+
+
+all: $(OBJS)
+$(OBJS):
+	-mkdir $(OBJS)
+
+all: $(OBJS)/nmrfilipgui
+
+clean: 
+	-rm $(OBJS)/*.o
+	-rm $(OBJS)/*.d
+	-rm $(OBJS)/*.gch
+	-rm $(OBJS)/nmrfilipgui
+
+install:
+	install -c -d $(BIN_INST_PATH)
+	install -c $(OBJS)/nmrfilipgui $(BIN_INST_PATH)
+
+uninstall:
+	-rm $(BIN_INST_PATH)/nmrfilipgui
+
+
+$(OBJS)/nmrfilipgui: $(NMRFILIPGUI_OBJECTS)
+	$(CXX) -o $@ $(NMRFILIPGUI_OBJECTS) $(LDFLAGS) $(LIBS) $(STRIP_FLAG)
+
+$(OBJS)/all.h.gch: all.h
+	$(CXX) -c -o $@ $(NMRFILIPGUI_CXXFLAGS) $(CPPDEPS) $<
+
+$(OBJS)/%.o: %.cpp $(__PCHPREREQ)
+	$(CXX) -c -o $@ $(NMRFILIPGUI_CXXFLAGS) $(__PCHINCLUDE) $(CPPDEPS) $<
+
+
+.PHONY: all clean install uninstall
+
+-include $(OBJS)/*.d

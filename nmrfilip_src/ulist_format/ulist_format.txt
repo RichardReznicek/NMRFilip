@@ -1,0 +1,121 @@
+Usage of the ulist files
+========================
+
+The ulist files provide a simple custom description of pseudo-2D experiments. The "ulist" file in the working dataset is supposed to be read by the custom AU program controlling the experiment. In the destination dataset, the AU program shall create a ulist file named "ulist.out", which is based on the content of the "ulist" file in the working dataset and contains actual values associated with particaluar steps (i.e. after possible rounding or other kind of adjustment by the spectrometer software). The "ulist.out" file is read by NMRFilip when processing the dataset. The AU program shall further copy also the original unmodified "ulist" file to the destination dataset for later reference. The file "uscan" provided with this documentation presents a sample implementation of such AU program for ulist-based control of experiments. 
+
+
+Description of the ulist file format
+====================================
+
+The ulist files indicate the type of the desired pseudo-2D experiment. This determines the variable(s) which will change for each step. The values of the variable(s) associated with particular steps are specified in the ulist files either as a parameterized series or directly as an array of values. The following parameter specifications, each appearing at a line start, must/may be contained in the ulist files: 
+
+
+##%AssocValueType= ?
+  -- mandatory parameter
+  -- specifies the type of experiment, i.e. what will be varied for each step
+  -- ? is a placeholder for integer number between 1 and 7 denoting a variation of the following:
+     1 - user-specified variable(s) in the ##%AssocValueVariable parameter
+     2 - RF power
+     3 - trigger (recycle) delay
+     4 - variable delay in the inversion recovery measurement
+     5 - additional echo delay in the T2 measurement
+     6 - pulse length in the nutation measurement
+     7 - frequency in the step-by-step measurement of a broad spectrum
+
+##%AssocValueVariable= ...
+  -- mandatory parameter if ##%AssocValueType= 1, ignored otherwise
+  -- ... is a placeholder for the name of user-specified variable(s) to be varied during the experiment
+  -- use semicolon or comma to separate multiple variables
+  -- only ASCII characters are expected
+
+
+##%AssocValueStart= ?
+  -- mandatory parameter, unless valid ##%AssocValues are provided
+  -- ? is a placeholder for real number specifying the initial value of the variable(s)
+
+##%AssocValueStep= ?
+  -- mandatory parameter, unless valid ##%AssocValues are provided
+  -- ? is a placeholder for real number specifying the initial size of increment added to the variable(s) when switching to a next step
+
+##%AssocValueCoef= ?
+  -- mandatory parameter, unless valid ##%AssocValues are provided
+  -- ? is a placeholder for non-negative real number specifying the coefficient multiplying the increment after switching to a next step
+
+##%StepCount= ?
+  -- mandatory parameter, unless valid ##%AssocValues are provided
+  -- ? is a placeholder for positive integer number specifying the count of the steps
+
+
+##%AssocValues= (0..?) ... 
+  -- can be omitted if valid ##%AssocValueStart, ##%AssocValueStep, ##%AssocValueCoef and ##%StepCount parameters are (all) provided, mandatory otherwise
+  -- valid ##%AssocValues have priority if they are provided in addition to ##%AssocValueStart, ##%AssocValueStep, ##%AssocValueCoef and ##%StepCount parameters
+  -- ? is a placeholder for integer number specifying the last index (starting from 0) of the array of real values separated by spaces following at the place of ...
+  -- the array shall not contain more than 1024 values
+
+
+##%StepOrder= ?
+  -- optional parameter
+  -- specifies in which order individual steps of the experiment are executed (does not affect the sequential storing)
+  -- ? is a placeholder for integer number between 0 and 4 with the following meaning:
+     0 - sequential, i.e. upward - this is the default used when the parameter is missing
+     1 - reversed, i.e. downward
+     2 - interlaced, i.e. even steps upward, then odd steps downward
+     3 - expanding, i.e. from the middle alternately in both directions
+     4 - spread, i.e. attempting even coverage of the step range throughout the run
+  -- if tuning in groups of several steps is requested, the step order is adjusted accordingly to avoid increase of the number of tunings (sequential and reversed order are not concerned)
+
+
+##%WobbStep= ?
+  -- optional parameter
+  -- indicates if and how often shall the probe be tuned during the experiment
+  -- ? is a placeholder for integer number with the meaning depending on the comparison with the number of steps (specified by the ##%StepCount parameter or by the length of the ##%AssocValues array):
+     - if it is larger than the number of steps, no tuning takes place - this is the default used when the parameter is missing
+     - if it is equal to the number of steps, tuning takes place at the start of the experiment
+     - if it is less than the number of steps and ##%AssocValueType= 7, tuning takes place every ? step(s), while the tuning frequency is set to the average of the corresponding step group
+
+
+##%Destination= ...
+  -- optional parameter
+  -- ... is a placeholder for the name of the destination dataset directory
+  -- if missing, default name shall be derived by AU program from the working dataset directory name
+
+
+##%RunBeforeExpWrk= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run before the experiment in the working dataset
+  -- only ASCII characters are expected
+
+##%RunBeforeExpDst= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run before the experiment in the destination dataset
+  -- only ASCII characters are expected
+
+##%RunAfterExpWrk= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run after the experiment in the working dataset
+  -- only ASCII characters are expected
+
+##%RunAfterExpDst= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run after the experiment in the destination dataset
+  -- only ASCII characters are expected
+
+##%RunBeforeStepWrk= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run before each step in the working dataset
+  -- only ASCII characters are expected
+
+##%RunBeforeStepDst= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run before each step in the destination dataset
+  -- only ASCII characters are expected
+
+##%RunAfterStepWrk= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run after each step in the working dataset
+  -- only ASCII characters are expected
+
+##%RunAfterStepDst= ...
+  -- optional parameter
+  -- ... is a placeholder for a command to run after each step in the destination dataset
+  -- only ASCII characters are expected

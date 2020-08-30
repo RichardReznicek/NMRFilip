@@ -1,0 +1,61 @@
+/* 
+ * NMRFilip GUI - the NMR data processing software - graphical user interface
+ * Copyright (C) 2020 Richard Reznicek
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/* XPM */
+static char *ignored[] = {
+/* columns rows colors chars-per-pixel */
+"32 32 3 1",
+"  c black",
+". c gray100",
+"X c None",
+/* pixels */
+"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+"XXX XXXXXXXXXXXXXXXXXXXXXXXX XXX",
+"XX   XXXXXXXXXXXXXXXXXXXXXX   XX",
+"X     XXXXXXXXXXXXXXXXXXXX     X",
+"XX     XXXXXXXXXXXXXXXXXX     XX",
+"XXX     XXXXXXXXXXXXXXXX     XXX",
+"XXXX     XXXXXXXXXXXXXX     XXXX",
+"XXXXX     XXXXXXXXXXXX     XXXXX",
+"XXXXXX     XXXXXXXXXX     XXXXXX",
+"XXXXXXX     XXXXXXXX     XXXXXXX",
+"XXXXXXXX     XXXXXX     XXXXXXXX",
+"XXXXXXXXX     XXXX     XXXXXXXXX",
+"XXXXXXXXXX     XX     XXXXXXXXXX",
+"XXXXXXXXXXX          XXXXXXXXXXX",
+"XXXXXXXXXXXX        XXXXXXXXXXXX",
+"XXXXXXXXXXXXX      XXXXXXXXXXXXX",
+"XXXXXXXXXXXXX      XXXXXXXXXXXXX",
+"XXXXXXXXXXXX        XXXXXXXXXXXX",
+"XXXXXXXXXXX          XXXXXXXXXXX",
+"XXXXXXXXXX     XX     XXXXXXXXXX",
+"XXXXXXXXX     XXXX     XXXXXXXXX",
+"XXXXXXXX     XXXXXX     XXXXXXXX",
+"XXXXXXX     XXXXXXXX     XXXXXXX",
+"XXXXXX     XXXXXXXXXX     XXXXXX",
+"XXXXX     XXXXXXXXXXXX     XXXXX",
+"XXXX     XXXXXXXXXXXXXX     XXXX",
+"XXX     XXXXXXXXXXXXXXXX     XXX",
+"XX     XXXXXXXXXXXXXXXXXX     XX",
+"X     XXXXXXXXXXXXXXXXXXXX     X",
+"XX   XXXXXXXXXXXXXXXXXXXXXX   XX",
+"XXX XXXXXXXXXXXXXXXXXXXXXXXX XXX",
+"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+};

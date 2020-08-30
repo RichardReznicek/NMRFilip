@@ -1,0 +1,13 @@
+##%FirstChunk= 0
+##%LastChunk= 0
+##%ChunkStart= 0
+##%ChunkEnd= 597
+##%DFTLength= 2048
+##%ScaleFirstTDPoint= 1
+##%RemoveOffset= 0
+##%FilterHz= 2000000000
+##%StepFlags= (0..15) 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+##%PhaseCorrFlags= (0..15) 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 1 
+##%PhaseCorr0= (0..15) -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 -45 
+##%PhaseCorr1= (0..15) 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+##%PhaseCorr1Ref= (0..15) -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 

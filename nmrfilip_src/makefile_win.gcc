@@ -1,0 +1,103 @@
+#~ NMRFilip LIB - the NMR data processing software - core library
+#~ NMRFilip CLI - the NMR data processing software - command line interface
+#~ Copyright (C) 2010, 2011, 2020 Richard Reznicek
+
+#~ This program is free software; you can redistribute it and/or
+#~ modify it under the terms of the GNU General Public License
+#~ as published by the Free Software Foundation; either version 2
+#~ of the License, or (at your option) any later version.
+
+#~ This program is distributed in the hope that it will be useful,
+#~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+#~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#~ GNU General Public License for more details.
+
+#~ You should have received a copy of the GNU General Public License
+#~ along with this program; if not, write to the Free Software
+#~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+BUILD ?= debug
+CFG ?= 
+DIGITAL_FILTER ?= 1
+
+CDEPS = -MT$@ -MF$@.d -MD -MP
+
+LIBS = -lm -lfftw3-3
+
+ifeq ($(CFG),32)
+LIBS += -static-libgcc
+endif
+
+CC = gcc
+
+NMRFILIP_CFLAGS = -D__WIN32__ -DDIGITAL_FILTER=$(DIGITAL_FILTER) -I. $(CDEPS)
+
+ifeq ($(BUILD),debug)
+NMRFILIP_CFLAGS += -g3 -O0 -Wall
+OBJS = gcc_wind$(CFG)
+STRIP_FLAG = 
+endif
+ifeq ($(BUILD),release)
+NMRFILIP_CFLAGS += -O3 -Wall -ffast-math -fno-finite-math-only
+OBJS = gcc_win$(CFG)
+STRIP_FLAG = -s
+endif
+
+NMRFILIP_OBJECTS =  \
+	$(OBJS)/nmrfilip.o \
+	$(OBJS)/nfio.o \
+	$(OBJS)/nfulist.o \
+	$(OBJS)/nfload.o \
+	$(OBJS)/nfproc.o \
+	$(OBJS)/nfexport.o
+
+
+all: $(OBJS)
+$(OBJS):
+	mkdir $(OBJS)
+
+all: 	$(OBJS)/libnmrfilip.dll
+
+all: 	$(OBJS)/nmrfilipcli.exe
+
+clean: 
+	-if exist $(OBJS)\*.o del $(OBJS)\*.o
+	-if exist $(OBJS)\*.d del $(OBJS)\*.d
+	-if exist $(OBJS)\nmrfilipcli.exe del $(OBJS)\nmrfilipcli.exe
+	-if exist $(OBJS)\libnmrfilip.dll del $(OBJS)\libnmrfilip.dll
+#	-if exist $(OBJS) rmdir /S /Q $(OBJS)
+
+
+$(OBJS)/libnmrfilip.dll: $(NMRFILIP_OBJECTS)
+	$(CC) -o $@ -shared $(NMRFILIP_OBJECTS) -L. -L$(OBJS) $(LIBS) $(STRIP_FLAG)
+
+$(OBJS)/nmrfilipcli.exe: $(OBJS)/nmrfilipcli.o $(OBJS)/libnmrfilip.dll
+	$(CC) -o $@ $(OBJS)/nmrfilipcli.o $(LIBS) -L. -L$(OBJS) -lnmrfilip $(STRIP_FLAG)
+
+
+$(OBJS)/nmrfilip.o: nmrfilip.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfio.o: nfio.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfulist.o: nfulist.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfload.o: nfload.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfproc.o: nfproc.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+$(OBJS)/nfexport.o: nfexport.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) -DBUILD_DLL $<
+
+
+$(OBJS)/nmrfilipcli.o: nmrfilipcli.c
+	$(CC) -c -o $@ $(NMRFILIP_CFLAGS) $<
+
+
+.PHONY: all clean
+
+-include $(OBJS)/*.d

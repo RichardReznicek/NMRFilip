@@ -1,0 +1,20 @@
+NMRFilip GUI - the NMR data processing software - graphical user interface
+Copyright (C) 2010, 2011, 2020 Richard Reznicek
+
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+----------------------------------------
+
+This program is based on the NMRFilip LIB core library (Copyright (C) 2010, 2011, 2020 Richard Reznicek) licensed under the terms of the GNU General Public License version 2 or any later version.
+
+----------------------------------------
+
+The NMRFilip LIB core library uses the FFTW library (http://www.fftw.org) (Copyright (c) 2003, 2007-14 Matteo Frigo, Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology) licensed under the terms of the GNU General Public License version 2 or any later version.
+
+----------------------------------------
+
+The NMRFilip GUI program uses the wxWidgets library (http://www.wxwidgets.org/) (Copyright (c) 1992-2018 Julian Smart, Vadim Zeitlin, Stefan Csomor, Robert Roebling, and other members of the wxWidgets team, Portions (c) 1996 Artificial Intelligence Applications Institute) licensed under the terms of the wxWindows Library License.

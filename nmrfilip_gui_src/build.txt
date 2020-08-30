@@ -1,0 +1,37 @@
+Before building the software, make sure that the wxWidgets library version 3.1.2 is installed. The same build type (debug or release or both) of the wxWidgets library as the intended one of the NMRFilip GUI should be installed. For debug type, set either the "--enable-debug" option of the configure script in unix-like systems or pass "BUILD=debug" to make command in Windows systems when building the wxWidgets library. Release build can be obtained without using the "--enable-debug" option of the configure script in unix-like systems or by specifying the "BUILD=release" argument of make command in Windows systems when building the wxWidgets library. See the wxWidgets library documentation for detailed installation instructions.
+
+Provided makefiles are intended for use with the GNU make for compilation with the GCC (or the MinGW on Windows). Currently, the NMRFilip GUI program was tested in unix-like systems only with the wxGTK build of the wxWidgets library. In Windows, the program is compiled as the MDI application by default (can be changed in the file "cd.h"). In unix-like systems, the NMRFilip GUI is intended to be compiled only as the SDI application.
+
+Before running the NMRFilip GUI, the NMRFilip LIB library should be made available at the place where system can find it when dynamic linking takes place.
+
+
+Building on unix-like systems
+=============================
+
+Building release version:
+	make -f makefile_lnx.gcc BUILD=release
+
+Installation (as root):
+	make -f makefile_lnx.gcc BUILD=release install
+
+Uninstallation (as root):
+	make -f makefile_lnx.gcc BUILD=release uninstall
+
+
+Building debug version:
+	make -f makefile_lnx.gcc BUILD=debug
+
+* Install path is /usr/local/bin for the NMRFilip GUI, you may change it in the "makefile_lnx.gcc" if necessary.
+* On some platforms, you may need to use the "gmake" command instead of the "make" in order to call the GNU make.
+
+
+Building on Windows
+===================
+
+In the following commands, substitute the "C:/wxWidgets-3.1.2" string by the actual path to your wxWidgets library installation.
+
+Building release version:
+	mingw32-make -f makefile_win.gcc WXDIR=C:/wxWidgets-3.1.2 BUILD=release
+
+Building debug version:
+	mingw32-make -f makefile_win.gcc WXDIR=C:/wxWidgets-3.1.2 BUILD=debug

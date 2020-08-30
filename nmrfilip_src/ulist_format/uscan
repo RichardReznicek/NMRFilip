@@ -1,0 +1,679 @@
+/* uscan - illustration of use of ulist in AU program for pseudo-2D experiments
+ * Copyright (C) 2020 Richard Reznicek
+ * 
+ * The following statement of license applies ONLY to this file.
+ * 
+ * Permission to use, copy, modify, and/or distribute this software for any 
+ * purpose with or without fee is hereby granted.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH 
+ * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY 
+ * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, 
+ * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR 
+ * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR 
+ * PERFORMANCE OF THIS SOFTWARE.
+ * 
+ */
+ 
+/** NOTE: The PLdB (dBW) and PLW (W) parameters may be unavailable on older spectrometers. Set Use_PLdB_PLW to 0 in that case to enable the use of the related PL (dB) parameter instead. **/
+#define Use_PLdB_PLW	1
+
+unsigned long AssocValueType, StepOrder;
+double AssocValueStart, AssocValueStep, AssocValueCoef;
+long StepCount, WobbStep;
+
+char AssocValueVariable[512], Destination[512], Working[512];
+char RunBeforeExpWrk[512], RunAfterExpWrk[512], RunBeforeStepWrk[512], RunAfterStepWrk[512];
+char RunBeforeExpDst[512], RunAfterExpDst[512], RunBeforeStepDst[512], RunAfterStepDst[512];
+char DestinationDir[1024], WorkingDir[1024], SrcPath[1024], DstPath[1024];
+
+char Variable[8][16];
+unsigned short VariableDataType[8];
+
+double *AssocValues = NULL, *ActualAssocValues = NULL, *WobbFreqs = NULL;
+long AssocValuesLength = 0;
+unsigned short *AssocIndices = NULL;
+
+long order0, order1, index = 0, idx0 = 0, idx1 = 0, length = 0;
+long WobbGrp = 0;
+unsigned short sh0, sh0r, sh1, sh1r;
+int read = 0, ioerr = 0;
+FILE *ulist = NULL;
+double AssocVal = 0.0, AssocStep = 0.0, TuneFreq = 0.0;
+int Tune = 0;
+
+int Serial, Parallel, DoBeep, Resume, RedoStep, NoCmd, UseXaua;
+int SerialFirstNo, SerialLastNo, SerialNo, ParallelFirstNo, ParallelLastNo, ParallelNo;
+int DestFirstNo, DestNo, StepNo;
+
+*DestinationDir = *WorkingDir = *SrcPath = *DstPath = '\0';
+
+#define ERRCLEANABORT(msg) { Proc_err(DEF_ERR_OPT, "%s", msg); free(AssocValues); free(ActualAssocValues); free(WobbFreqs); free(AssocIndices); ABORT }
+
+#ifndef NAN
+#define NAN	(0.0/0.0)
+#endif
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) 
+#define IsFiniteVal(x)	isfinite(x)
+#else 
+#define IsFiniteVal(x)	((x) == (x))
+#endif
+
+/** Parse arguments **/
+if (strstr(cmd, "help") != NULL) {
+	printf(
+#ifdef WIN32
+		"Usage:\n  uscan [serial | parallel] [beep] [resume | redostep] [nocmd] [xaua] [help]\n\n"
+#else
+		"Usage:\n  uscan [serial | parallel] [resume | redostep] [nocmd] [xaua] [help]\n\n"
+#endif
+		"  serial    - run several experiments in series\n"
+		"  parallel  - run several (usually spectrum) experiments in parallel\n"
+		"              using the ulist of the first experiment\n"
+#ifdef WIN32
+		"  beep      - beep when tuning is needed and when the measurement completes\n"
+#endif
+		"  resume    - continue interrupted experiment(s)\n"
+		"  redostep  - measure selected step again (incompatible with \'serial\' option)\n"
+		"  nocmd     - do not execute any command specified in ulist\n"
+		"  xaua      - start acquisition of each step using xaua instead of zg\n"
+		"  help      - show this message and quit\n" );
+	STOP
+}
+
+/** The "serial" and "parallel" arguments cannot be combined **/
+Serial = (strstr(cmd, "serial") != NULL);
+Parallel = (strstr(cmd, "parallel") != NULL);
+DoBeep = (strstr(cmd, "beep") != NULL);
+Resume = (strstr(cmd, "resume") != NULL);
+RedoStep = (strstr(cmd, "redostep") != NULL);
+NoCmd = (strstr(cmd, "nocmd") != NULL);
+UseXaua = (strstr(cmd, "xaua") != NULL);
+
+if ((Serial && Parallel) || (RedoStep && (Resume || Serial)))
+	ERRCLEANABORT("Invalid combination of options supplied")
+
+GETCURDATA;
+
+sprintf(Working, "%s", name);
+if (strlen(user) > 0)
+	sprintf(WorkingDir, "%s/data/%s/nmr/%s", disk, user, Working);
+else
+	sprintf(WorkingDir, "%s/%s", disk, Working);
+
+SerialFirstNo = SerialLastNo = expno;
+
+if (Serial) {
+	GETINT("Enter the number of the FIRST working dataset", SerialFirstNo)
+	GETINT("Enter the number of the LAST working dataset", SerialLastNo)
+	if ((SerialFirstNo <= 0) || (SerialFirstNo > SerialLastNo) || (SerialLastNo >= gethighest(WorkingDir))) 
+		ERRCLEANABORT("Invalid combination of dataset numbers supplied")
+}
+
+
+for (SerialNo = SerialFirstNo; SerialNo <= SerialLastNo; SerialNo++) {
+	
+	ParallelFirstNo = ParallelLastNo = SerialNo;
+	
+	if (Parallel) {
+		GETINT("Enter the number of the FIRST working dataset", ParallelFirstNo)
+		GETINT("Enter the number of the LAST working dataset", ParallelLastNo)
+		if ((ParallelFirstNo <= 0) || (ParallelFirstNo > ParallelLastNo) || (ParallelLastNo >= gethighest(WorkingDir))) 
+			ERRCLEANABORT("Invalid combination of dataset numbers supplied")
+	}
+	
+	DATASET(Working, ParallelFirstNo, 1, disk, user)
+	
+	
+	/** Initialize parameters **/
+	AssocValueType = 0;
+	AssocValueStart = AssocValueStep = AssocValueCoef = NAN;
+	StepCount = 0;
+	TuneFreq = NAN;
+	WobbGrp = 1;
+	StepOrder = 0;
+	WobbStep = LONG_MAX;
+	*AssocValueVariable = *Destination = '\0';
+	*RunBeforeExpWrk = *RunAfterExpWrk = *RunBeforeStepWrk = *RunAfterStepWrk = '\0';
+	*RunBeforeExpDst = *RunAfterExpDst = *RunBeforeStepDst = *RunAfterStepDst = '\0';
+
+
+	/** Read ulist **/
+#define MakeSrcPathPF(fname, acq) { sprintf(SrcPath, acq ? "%s/%d/%s" : "%s/%d/pdata/1/%s", WorkingDir, ParallelFirstNo, fname); }
+
+/*	if ((ulist = fopen(ACQUPATH("ulist"), "r")) == NULL)	*/
+	MakeSrcPathPF("ulist", 1)
+	if ((ulist = fopen(SrcPath, "r")) == NULL)
+		ERRCLEANABORT("Cannot open input ulist file")
+
+	
+	while ((read = fscanf(ulist, " ##%%%18[A-Za-z]= ", text)) != EOF) {
+		if (read == 1) {
+#define ScanVal(param, fmt)	if (strcmp(text, #param) == 0) { if ((ioerr = (fscanf(ulist, fmt, &param) != 1))) break; } 
+#define ScanULong(param) 	ScanVal(param, "%lu")
+#define ScanLong(param)  	ScanVal(param, "%ld")
+#define ScanDouble(param)	ScanVal(param, "%lf")
+#define ScanStr(param)     	if (strcmp(text, #param) == 0) { if ((fscanf(ulist, "%511[^\r\n]", param) == EOF) || (ioerr = (strlen(param) > 510))) break; } 
+			
+			ScanULong(AssocValueType)
+			ScanULong(StepOrder)
+			ScanLong(StepCount)
+			ScanLong(WobbStep)
+			
+			ScanDouble(AssocValueStart)
+			ScanDouble(AssocValueStep)
+			ScanDouble(AssocValueCoef)
+			
+			ScanStr(AssocValueVariable)
+			ScanStr(Destination)
+			ScanStr(RunBeforeExpWrk)
+			ScanStr(RunBeforeExpDst)
+			ScanStr(RunAfterExpWrk)
+			ScanStr(RunAfterExpDst)
+			ScanStr(RunBeforeStepWrk)
+			ScanStr(RunBeforeStepDst)
+			ScanStr(RunAfterStepWrk)
+			ScanStr(RunAfterStepDst)
+			
+			if (strcmp(text, "AssocValues") == 0) {
+				read = fscanf(ulist, "(0..%ld)", &length);
+				ioerr = ((read != 1) || (length < 0) || (length >= 1024));
+				length++;
+				
+				if (!ioerr)
+					ioerr = ((AssocValues = malloc(length*sizeof(double))) == NULL);
+				
+				for (AssocValuesLength = 0; (AssocValuesLength < length) && !ioerr; AssocValuesLength++)
+					ioerr = (fscanf(ulist, "%lf", &(AssocValues[AssocValuesLength])) != 1);
+				
+				if (ioerr)
+					break;
+			}
+		}
+		
+		if (fscanf(ulist, "%*[^\r\n]") == EOF)
+			break;
+	}
+
+	if ((fclose(ulist) != 0) || ioerr) 
+		ERRCLEANABORT("Reading parameter set from ulist file failed")
+
+	
+	/** Check ulist parameters **/
+	if (AssocValues != NULL) 
+		StepCount = AssocValuesLength;
+
+	if (	(AssocValueType == 0) || (AssocValueType > 7) || (StepCount <= 0) || (StepCount > 1024) || 
+		((AssocValueType == 1) && (strlen(AssocValueVariable) == 0)) ||
+		((AssocValues == NULL) && (!IsFiniteVal(AssocValueStart) || !IsFiniteVal(AssocValueStep) || 
+			!IsFiniteVal(AssocValueCoef) || (AssocValueCoef < 0.0))) )
+		ERRCLEANABORT("Invalid parameter set read from ulist file")
+
+	if (StepOrder > 4) 
+		StepOrder = 0;
+
+	if (WobbStep <= 0) 
+		WobbStep = LONG_MAX;
+
+
+	/** Prepare associated values if necessary **/
+	if (AssocValues == NULL) {
+		if ((AssocValues = malloc(StepCount*sizeof(double))) == NULL) 
+			ERRCLEANABORT("Memory allocation failed")
+	
+		AssocVal = AssocValueStart;
+		AssocStep = AssocValueStep;
+		for (AssocValuesLength = 0; AssocValuesLength < StepCount; AssocValuesLength++) {
+			AssocValues[AssocValuesLength] = AssocVal;
+			AssocVal += AssocStep;
+			AssocStep *= AssocValueCoef;
+		}
+	}
+
+
+	/** Prepare parameter names and datatypes corresponding to the associated values **/
+	switch (AssocValueType) {
+		case 7:	/** spectrum **/
+			strcpy(AssocValueVariable, "SFO1, SFO2");
+			break;
+		
+		case 6:	/** nutation **/
+			strcpy(AssocValueVariable, "P 1");
+			break;
+		
+		case 5:	/** T2 relaxation **/
+		case 4:	/** inversion recovery **/
+			strcpy(AssocValueVariable, "D 3");
+			break;
+		
+		case 3:	/** trigger delay **/
+			strcpy(AssocValueVariable, "D 1");
+			break;
+		
+		case 2:	/** RF power **/
+#if Use_PLdB_PLW
+			strcpy(AssocValueVariable, "PLdB 1, PLdB 21, PLdB 22");
+#else
+			strcpy(AssocValueVariable, "PL 1, PL 21, PL 22");
+#endif
+			break;
+		
+		case 1:	/** variable **/
+		default:
+			break;
+	}
+
+	for (index = 0; index < 8; index++) 
+		Variable[index][0] = '\0';
+	
+	for (idx0 = 0, index = 0; AssocValueVariable[idx0] != '\0'; idx0++) {
+		i1 = strspn(AssocValueVariable + idx0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_9");
+		if (i1 == 0)
+			continue;
+		
+		if (index >= 8)
+			ERRCLEANABORT("Too many variable names supplied in ulist")
+		
+		i2 = strspn(AssocValueVariable + idx0 + i1, " 0123456789");
+		if (((i1 + i2) > 15) || (i1 > 14))
+			ERRCLEANABORT("Too long variable name supplied in ulist")
+		
+		sprintf(Variable[index], "%.*s ", i1, AssocValueVariable + idx0);
+		if (strstr("BF INP IN O SFO ", Variable[index]) != NULL)
+			VariableDataType[index] = 0;	/** double **/
+		else 
+#if Use_PLdB_PLW
+		if (strstr("CNST D DE FW P PHCOR PCPD PH_ref PLdB PLW RG TE V9 ", Variable[index]) != NULL)
+#else
+		if (strstr("CNST D DE FW P PHCOR PCPD PH_ref PL RG TE V9 ", Variable[index]) != NULL)
+#endif
+			VariableDataType[index] = 1;	/** float **/
+		else
+		if (strstr("DS L NS RO ", Variable[index]) != NULL)
+			VariableDataType[index] = 2;	/** int **/
+		else 
+			ERRCLEANABORT("Unsupported variable name supplied in ulist")
+		
+		sprintf(Variable[index], "%.*s", i1 + i2, AssocValueVariable + idx0);
+		for (i3 = i1 + i2 - 1; (i3 >= 0) && (Variable[index][i3] == ' '); i3--) 
+			Variable[index][i3] = '\0';
+		
+		idx0 += i1 + i2 - 1;
+		index++;
+	}
+	
+	if (strlen(Variable[0]) == 0)
+		ERRCLEANABORT("No valid variable name obtained from ulist")
+	
+
+	/** Calculate tuning frequencies **/
+	if ((AssocValueType == 7) && (WobbStep <= StepCount)) {
+		if ((WobbFreqs = malloc(StepCount*sizeof(double))) == NULL) 
+			ERRCLEANABORT("Memory allocation failed")
+	
+		for (index = 0; index < StepCount; index++) {
+			if (index%WobbStep == 0) {
+				WobbFreqs[index] = 0.0;
+				for (idx0 = 0; (idx0 < WobbStep) && ((index + idx0) < StepCount); idx0++)
+					WobbFreqs[index] += AssocValues[index + idx0];
+				WobbFreqs[index] /= idx0;
+			} else
+				WobbFreqs[index] = WobbFreqs[index - index%WobbStep];
+		}
+		
+		WobbGrp = ((WobbStep < StepCount)?(WobbStep):(1));
+	}
+
+
+	/** Create the array of step indices **/
+	if ((AssocIndices = malloc(StepCount*sizeof(unsigned short))) == NULL) 
+		ERRCLEANABORT("Memory allocation failed")
+
+	switch (StepOrder) {
+		case 4: /** spread **/
+			for (order0 = 0, sh0 = 1u; sh0 < (StepCount + WobbGrp - 1)/WobbGrp; order0++, sh0 <<= 1) ;
+			for (order1 = 0, sh1 = 1u; sh1 < WobbGrp; order1++, sh1 <<= 1) ;
+		
+			for (sh0 = 0, index = 0; (sh0 < (1u << (order0 + 1))) && (index < StepCount); sh0++) {
+				for (sh0r = 0, idx0 = 0; idx0 <= order0; idx0++)
+					if (sh0 & (1u << idx0))
+						sh0r |= (1u << (order0 - idx0));
+				
+				for (sh1 = 0; (sh0r < (StepCount + WobbGrp - 1)/WobbGrp) && (sh1 < (1u << (order1 + 1))) && (index < StepCount); sh1++) {
+					for (sh1r = 0, idx1 = 0; idx1 <= order1; idx1++)
+						if (sh1 & (1u << idx1))
+							sh1r |= (1u << (order1 - idx1));
+						
+					if ((sh1r < WobbGrp) && ((sh0r*WobbGrp + sh1r) < StepCount)) 
+						AssocIndices[index++] = sh0r*WobbGrp + sh1r;	
+				}
+			}
+			break;
+		
+		case 3: /** expanding **/
+			for (idx0 = StepCount/2, idx1 = idx0 - 1, index = 0; index < StepCount; index++) {
+				if (index < WobbGrp) {
+					if (((index%2 == 0) && (idx0 < (StepCount/WobbGrp/2 + 1)*WobbGrp)) || ((index%2 == 1) && (idx1 < StepCount/WobbGrp/2*WobbGrp)))
+						AssocIndices[index] = idx0++;
+					else
+						AssocIndices[index] = idx1--;
+				} else {
+					if (((index/WobbGrp)%2 == (((StepCount/2)%WobbGrp > WobbGrp/2)?(1):(0))) && (idx0 < StepCount))
+						AssocIndices[index] = idx0++;
+					else
+						AssocIndices[index] = idx1--;
+				}
+			}
+			break;
+		
+		case 2: /** interlaced **/
+			for (idx0 = 0, idx1 = StepCount - 1, index = 0; index < StepCount; index++) {
+				if ((index/WobbGrp)%2 == 0) 
+					AssocIndices[idx0++] = index;
+				else
+					AssocIndices[idx1--] = index;
+			}
+			break;
+		
+		case 1: /** reversed **/
+			for (index = 0; index < StepCount; index++) 
+				AssocIndices[index] = StepCount - 1 - index;
+			break;
+		
+		case 0: /** sequential **/
+		default: 
+			for (index = 0; index < StepCount; index++) 
+				AssocIndices[index] = index;
+			break;
+	}
+
+
+	/** Get actual associated values after rounding and/or adjustment **/
+	if ((ActualAssocValues = malloc(StepCount*sizeof(double))) == NULL) 
+		ERRCLEANABORT("Memory allocation failed")
+	
+	switch (VariableDataType[0]) {
+		case 2:	/** int **/
+			for (index = 0; index < StepCount; index++) {
+				i1 = ((int) (2.0*AssocValues[index])) - ((int) AssocValues[index]);
+				STOREPAR(Variable[0], i1)
+				FETCHPAR(Variable[0], &i1)
+				ActualAssocValues[index] = i1;
+			}
+			break;
+		
+		case 1:	/** float **/
+			for (index = 0; index < StepCount; index++) {
+				f1 = AssocValues[index];
+				STOREPAR(Variable[0], f1)
+				FETCHPAR(Variable[0], &f1)
+				ActualAssocValues[index] = f1;
+			}
+			break;
+		
+		case 0:	/** double **/
+		default:
+			for (index = 0; index < StepCount; index++) {
+				d1 = AssocValues[index];
+				STOREPAR(Variable[0], d1)
+				FETCHPAR(Variable[0], &d1)
+				ActualAssocValues[index] = d1;
+			}
+			break;
+	}
+
+	
+	
+	if (strlen(Destination) == 0)
+		sprintf(Destination, "%s_h", name);
+	if (strlen(user) > 0)
+		sprintf(DestinationDir, "%s/data/%s/nmr/%s", disk, user, Destination);
+	else
+		sprintf(DestinationDir, "%s/%s", disk, Destination);
+
+	DestFirstNo = gethighest(DestinationDir);
+	idx0 = 0;
+	idx1 = StepCount;
+	StepNo = 0;
+
+	if ((Resume || RedoStep) && (SerialNo == SerialFirstNo)) {
+		DestFirstNo -= ParallelLastNo + 1 - ParallelFirstNo;
+		if (DestFirstNo <= 0)
+			ERRCLEANABORT("Invalid combination of dataset numbers supplied")
+
+		if (Resume) {
+			if (Parallel) {
+				GETINT("Enter the number of the first destination dataset of the interrupted experiments", DestFirstNo)
+				GETINT("Enter the number of the last completed step (numbered from zero) \n(see audita.txt in the last destination dataset)", StepNo)
+			} else {
+				GETINT("Enter the number of the destination dataset of the interrupted experiment", DestFirstNo)
+				GETINT("Enter the number of the last completed step (numbered from zero) \n(see audita.txt in the destination dataset)", StepNo)
+			}
+		} else { /** RedoStep **/
+			if (Parallel) {
+				GETINT("Enter the number of the first destination dataset of the affected experiments", DestFirstNo)
+				GETINT("Enter the number of the step to repeat (numbered from zero)", StepNo)
+			} else {
+				GETINT("Enter the number of the destination dataset of the affected experiment", DestFirstNo)
+				GETINT("Enter the number of the step to repeat (numbered from zero)", StepNo)
+			}
+		}
+		
+		if ( (DestFirstNo <= 0) || ((DestFirstNo + ParallelLastNo - ParallelFirstNo) >= gethighest(DestinationDir)) || 
+			((SerialLastNo > SerialFirstNo) && ((DestFirstNo + 1) < gethighest(DestinationDir))) )
+			ERRCLEANABORT("Invalid combination of dataset numbers supplied")
+		
+		if ((StepNo < 0) || (StepNo >= StepCount)) 
+			ERRCLEANABORT("Out-of-range step number supplied")
+		
+		for (idx0 = 0; (idx0 < StepCount) && (AssocIndices[idx0] != StepNo); idx0++) ;
+		if (Resume)
+			idx0++;
+		else /** RedoStep **/
+			idx1 = idx0 + 1;
+	}
+	
+#define ExecuteCmd(cmd)	{ if ((strlen(cmd) > 0) && !NoCmd) XCMD(cmd) }
+	
+	/** Run the experiment **/
+	for (index = idx0; index < idx1; index++) {
+		StepNo = AssocIndices[index];
+		
+		for (ParallelNo = ParallelFirstNo, DestNo = DestFirstNo; ParallelNo <= ParallelLastNo; ParallelNo++, DestNo++) {
+			
+			DATASET(Working, ParallelNo, 1, disk, user)
+			
+			/** Run wobbler if necessary **/
+			Tune = ((index == idx0) && (ParallelNo == ParallelFirstNo) && (WobbStep == StepCount));
+			
+			if ((WobbFreqs != NULL) && (WobbFreqs[StepNo] != TuneFreq)) {
+				TuneFreq = WobbFreqs[StepNo];
+				Tune = 1;
+				/** Set tuning frequency **/
+				STOREPAR("SFO1", TuneFreq)
+				STOREPAR("SFO2", TuneFreq)
+			}
+			
+			if (Tune) {
+#ifdef WIN32
+				if (DoBeep)
+					Beep(2000, 500);
+#endif
+				XCMD("acqu")
+				XCMD("wobb")
+			}
+			
+			/** Store parameters **/
+			for (i2 = 0; (i2 < 8) && (strlen(Variable[i2]) > 0); i2++) {
+				switch (VariableDataType[i2]) {
+					case 2:	/** int **/
+						i1 = ((int) (2.0*AssocValues[StepNo])) - ((int) AssocValues[StepNo]);
+						STOREPAR(Variable[i2], i1)
+						break;
+					
+					case 1:	/** float **/
+						f1 = AssocValues[StepNo];
+						STOREPAR(Variable[i2], f1)
+						break;
+					
+					case 0:	/** double **/
+					default:
+						d1 = AssocValues[StepNo];
+						STOREPAR(Variable[i2], d1)
+						break;
+				}
+			}
+			
+			
+			/** Create destination 2D dataset from defaults **/
+			if (index == 0) {
+				DATASET(Destination, DestNo, 1, disk, user)
+				RPAR("standard2D", "all")
+				DATASET(Working, ParallelNo, 1, disk, user)
+			}
+			
+			
+		/*	if (index == 0) {	*/
+			if (index == idx0) {
+				ExecuteCmd(RunBeforeExpWrk)
+				DATASET(Destination, DestNo, 1, disk, user)
+				ExecuteCmd(RunBeforeExpDst)
+				DATASET(Working, ParallelNo, 1, disk, user)
+			}
+			
+			ExecuteCmd(RunBeforeStepWrk)
+			DATASET(Destination, DestNo, 1, disk, user)
+			ExecuteCmd(RunBeforeStepDst)
+			DATASET(Working, ParallelNo, 1, disk, user)
+			
+			
+			/** Run acquisition **/
+			if (UseXaua)
+				XAUA
+			else 
+				ZG
+			
+			ExecuteCmd(RunAfterStepWrk)
+			
+			/** Prepare destination dataset appropriately **/
+			if (index == 0) {
+				DATASET(Destination, DestNo, 1, disk, user)
+				
+#define MakeSrcPath(fname, acq) { sprintf(SrcPath, acq ? "%s/%d/%s" : "%s/%d/pdata/1/%s", WorkingDir, ParallelNo, fname); }
+#define MakeDstPath(fname, acq) { sprintf(DstPath, acq ? "%s/%d/%s" : "%s/%d/pdata/1/%s", DestinationDir, DestNo, fname); }
+#define DoDircpSrcDst	{ if ((i3 = dircp(SrcPath, DstPath)) < 0) ERRCLEANABORT(dircp_err(i3)) }
+#define CopyFileToDst(fname, acq) { MakeSrcPath(fname, acq) MakeDstPath(fname, acq) DoDircpSrcDst }
+
+				/** Copy crucial files from the working dataset to the destination dataset **/
+				CopyFileToDst("pulseprogram", 1)
+				CopyFileToDst("acqu", 1)
+				CopyFileToDst("acqus", 1)
+				CopyFileToDst("proc", 0)
+				CopyFileToDst("procs", 0)
+				
+				/** Switch the destination dataset again to 2D and set indirect TD **/
+				STOREPAR("PARMODE", 1)
+				STOREPARS("PARMODE", 1)
+				STOREPAR("PPARMOD", 1)
+				STOREPARS("PPARMOD", 1)
+				STOREPAR1("TD", StepCount)
+				STOREPAR1S("TD", StepCount)
+
+				/** Copy the _corresponding_ ulist to the destination dataset **/
+				MakeSrcPathPF("ulist", 1)
+				MakeDstPath("ulist", 1)
+				DoDircpSrcDst
+				
+				/** Write ulist.out with actual associated values to the destination dataset **/
+			/*	if ((ulist = fopen(ACQUPATH("ulist.out"), "w")) == NULL)	*/
+				MakeDstPath("ulist.out", 1)
+				if ((ulist = fopen(DstPath, "w")) == NULL)
+					ERRCLEANABORT("Cannot open output ulist file")
+
+#define PrintVal(param, fmt)	{ ioerr = ioerr || (fprintf(ulist, "##%%" #param "= " fmt "\n", param) < 0); } 
+#define PrintULong(param)	PrintVal(param, "%lu")
+#define PrintLong(param)	PrintVal(param, "%ld")
+#define PrintDouble(param)	PrintVal(param, "%.15g")
+#define PrintStr(param)	if (strlen(param) > 0) { ioerr = ioerr || (fprintf(ulist, "##%%" #param "= %s\n", param) < 0); } 
+
+				PrintULong(AssocValueType)
+				if (AssocValueType == 1)
+					PrintStr(AssocValueVariable)
+				
+				if (IsFiniteVal(AssocValueStart) && IsFiniteVal(AssocValueStep) && IsFiniteVal(AssocValueCoef) && !(AssocValueCoef < 0.0)) {
+					PrintDouble(AssocValueStart)
+					PrintDouble(AssocValueStep)
+					PrintDouble(AssocValueCoef)
+					PrintLong(StepCount)
+				}
+				
+				ioerr = ioerr || (fprintf(ulist, "##%%AssocValues= (0..%ld) ", StepCount - 1) < 0);
+				for (i1 = 0; (i1 < StepCount) && !ioerr; i1++) 
+					ioerr = ioerr || (fprintf(ulist, "%.15g ", ActualAssocValues[i1]) < 0);
+				ioerr = ioerr || (fprintf(ulist, "\n") < 0);
+				
+				PrintULong(StepOrder)
+				if (WobbStep <= StepCount)
+					PrintLong(WobbStep)
+				PrintStr(Destination)
+				PrintStr(RunBeforeExpWrk)
+				PrintStr(RunBeforeExpDst)
+				PrintStr(RunAfterExpWrk)
+				PrintStr(RunAfterExpDst)
+				PrintStr(RunBeforeStepWrk)
+				PrintStr(RunBeforeStepDst)
+				PrintStr(RunAfterStepWrk)
+				PrintStr(RunAfterStepDst)
+				
+				if ((fclose(ulist) != 0) || ioerr) 
+					ERRCLEANABORT("Writing parameter set to ulist file failed")
+				
+				DATASET(Working, ParallelNo, 1, disk, user)
+			}
+
+			/** Copy acquired step to the destination dataset **/
+			WSER(StepNo + 1, Destination, DestNo, 1, disk, user)
+			
+			
+			/** Update audit trail **/
+			DATASET(Destination, DestNo, 1, disk, user)
+			sprintf(text, "step %d: %.8g completed", StepNo, ActualAssocValues[StepNo]);
+			AUDITCOMMENTA(text)
+			GDCHECK_RAW
+		/*	DATASET(Working, ParallelNo, 1, disk, user)
+			
+			DATASET(Destination, DestNo, 1, disk, user)	*/
+			ExecuteCmd(RunAfterStepDst)
+			DATASET(Working, ParallelNo, 1, disk, user)
+			
+		/*	if ((index + 1) == StepCount) {	*/
+			if ((index + 1) == idx1) {
+				ExecuteCmd(RunAfterExpWrk)
+				DATASET(Destination, DestNo, 1, disk, user)
+				ExecuteCmd(RunAfterExpDst)
+				DATASET(Working, ParallelNo, 1, disk, user)
+			}
+			
+		}
+		
+	}
+
+	free(AssocValues);
+	free(ActualAssocValues);
+	free(WobbFreqs);
+	free(AssocIndices);
+	WobbFreqs = ActualAssocValues = AssocValues = NULL;
+	AssocValuesLength = 0;
+	AssocIndices = NULL;
+
+}
+
+#ifdef WIN32
+if (DoBeep)
+	Beep(500, 300);
+#endif
+
+QUIT
+#include <inc/sysutil>

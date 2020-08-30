@@ -1,0 +1,190 @@
+#~ NMRFilip GUI - the NMR data processing software - graphical user interface
+#~ Copyright (C) 2010, 2020 Richard Reznicek
+
+#~ This program is free software; you can redistribute it and/or
+#~ modify it under the terms of the GNU General Public License
+#~ as published by the Free Software Foundation; either version 2
+#~ of the License, or (at your option) any later version.
+
+#~ This program is distributed in the hope that it will be useful,
+#~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+#~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#~ GNU General Public License for more details.
+
+#~ You should have received a copy of the GNU General Public License
+#~ along with this program; if not, write to the Free Software
+#~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+### Override this to the location of your wxWidgets installation:
+WXDIR ?= C:/wxWidgets-3.1.2
+
+### Override this if you want to use precompiled headers:
+WITH_PCH ?= 0
+
+include $(WXDIR)/build/msw/config.gcc
+
+WX_RELEASE_NODOT = 31
+
+CPPDEPS = -MT$@ -MF$@.d -MD -MP
+
+OBJS = gcc_$(PORTNAME)$(WXUNICODEflg)$(WXDEBUGflg)$(WXDLLflg)$(CFG)
+
+LIBDIR = $(WXDIR)/lib/gcc_$(LIBsuffix)$(CFG)
+
+SETUPHDIR = $(LIBDIR)/$(PORTNAME)$(WXUNICODEflg)$(WXDEBUGflg)
+
+NMRFILIPGUI_CXXFLAGS = $(__DEBUGinfo) $(__OPTIMIZEflg) $(__THREADSflg) $(GCCFLAGS) -DHAVE_W32API_H -D__WXMSW__ $(__DEBUGdef) $(__NDEBUGdef) $(__EXCEPTIONSdef) $(__RTTIdef) $(__THREADdef) $(__UNICODEdef) $(__DLLdef) -I$(SETUPHDIR) -I$(WXDIR)/include -I. -Wall -Wno-ctor-dtor-privacy -Wno-write-strings $(__PCHflg) $(__RTTIflg) $(__EXCEPTIONSflg) $(CPPFLAGS) $(CXXFLAGS)
+
+NMRFILIPGUI_OBJECTS =  \
+	$(OBJS)/nmrfilipgui.o \
+	$(OBJS)/nmrdata.o \
+	$(OBJS)/doc.o \
+	$(OBJS)/view.o \
+	$(OBJS)/resfile.o \
+	$(OBJS)/validators.o \
+	$(OBJS)/panelmain.o \
+	$(OBJS)/panelproc.o \
+	$(OBJS)/panels.o \
+	$(OBJS)/userlist.o \
+	$(OBJS)/plotgen.o \
+	$(OBJS)/plotimp.o \
+	$(OBJS)/plotwin.o \
+	$(OBJS)/print.o \
+	$(OBJS)/nfgps.o \
+	$(OBJS)/infopanel.o \
+	$(OBJS)/artpr.o
+
+
+PORTNAME = msw$(TOOLKIT_VERSION)
+
+ifeq ($(BUILD),release)
+__OPTIMIZEflg = -O3 -ffast-math -fno-finite-math-only
+__NDEBUGdef = -DNDEBUG
+__NDEBUGdef1 = --define NDEBUG
+ifeq ($(DEBUG_INFO),default)
+__DEBUGinfo = 
+endif
+STRIP_FLAG = -s
+endif
+
+ifeq ($(BUILD),debug)
+__OPTIMIZEflg = -O0
+WXDEBUGflg = d
+ifeq ($(DEBUG_INFO),default)
+__DEBUGinfo = -g
+endif
+STRIP_FLAG = 
+endif
+
+ifeq ($(DEBUG_FLAG),0)
+__DEBUGdef = -DwxDEBUG_LEVEL=0
+__DEBUGdef1 = --define wxDEBUG_LEVEL=0
+endif
+
+ifeq ($(DEBUG_INFO),0)
+__DEBUGinfo = 
+endif
+ifeq ($(DEBUG_INFO),1)
+__DEBUGinfo = -g
+endif
+
+ifeq ($(WITH_PCH),0)
+__PCHflg = -DNOPCH
+__PCHINCLUDE = 
+__PCHPREREQ = 
+endif
+ifeq ($(WITH_PCH),1)
+__PCHflg = -DUSE_PCH -Winvalid-pch
+__PCHINCLUDE = -include $(OBJS)/all.h
+__PCHPREREQ = $(OBJS)/all.h.gch
+endif
+
+ifeq ($(UNICODE),1)
+WXUNICODEflg = u
+__UNICODEdef = -D_UNICODE
+__UNICODEdef1 = --define _UNICODE
+endif
+ifeq ($(UNICODE),0)
+__UNICODEdef = -DwxUSE_UNICODE=0
+__UNICODEdef1 = --define wxUSE_UNICODE=0
+endif
+
+ifeq ($(SHARED),1)
+WXDLLflg = dll
+LIBsuffix = dll
+__DLLdef = -DWXUSINGDLL
+__DLLdef1 = --define WXUSINGDLL
+endif
+ifeq ($(SHARED),0)
+LIBsuffix = lib
+endif
+
+ifeq ($(USE_RTTI),0)
+__RTTIflg = -fno-rtti
+__RTTIdef = -DwxNO_RTTI
+__RTTIdef1 = --define wxNO_RTTI
+endif
+ifeq ($(USE_RTTI),1)
+__RTTIflg = 
+endif
+
+ifeq ($(USE_EXCEPTIONS),0)
+__EXCEPTIONSflg = -fno-exceptions
+__EXCEPTIONSdef = -DwxNO_EXCEPTIONS
+__EXCEPTIONSdef1 = --define wxNO_EXCEPTIONS
+endif
+ifeq ($(USE_EXCEPTIONS),1)
+__EXCEPTIONSflg = 
+endif
+
+ifeq ($(USE_THREADS),0)
+__THREADdef = -DwxNO_THREADS
+__THREADdef1 = --define wxNO_THREADS
+__THREADSflg = 
+endif
+ifeq ($(USE_THREADS),1)
+__THREADSflg = -mthreads
+endif
+
+ifeq ($(MONOLITHIC),0)
+__WXLIB_CORE = -lwx$(PORTNAME)$(WX_RELEASE_NODOT)$(WXUNICODEflg)$(WXDEBUGflg)$(WX_LIB_FLAVOUR)_core
+__WXLIB_BASE = -lwxbase$(WX_RELEASE_NODOT)$(WXUNICODEflg)$(WXDEBUGflg)$(WX_LIB_FLAVOUR)
+endif
+ifeq ($(MONOLITHIC),1)
+__WXLIB_MONO = -lwx$(PORTNAME)$(WX_RELEASE_NODOT)$(WXUNICODEflg)$(WXDEBUGflg)$(WX_LIB_FLAVOUR)
+endif
+
+
+all: $(OBJS)
+$(OBJS):
+	-if not exist $(OBJS) mkdir $(OBJS)
+
+all: $(OBJS)/nmrfilipgui.exe
+
+clean: 
+	-if exist $(OBJS)\*.o del $(OBJS)\*.o
+	-if exist $(OBJS)\*.d del $(OBJS)\*.d
+	-if exist $(OBJS)\*.gch del $(OBJS)\*.gch
+	-if exist $(OBJS)\nmrfilipgui.exe del $(OBJS)\nmrfilipgui.exe
+
+
+$(OBJS)/nmrfilipgui.exe: $(NMRFILIPGUI_OBJECTS)
+	$(CXX) -o $@ $(NMRFILIPGUI_OBJECTS) $(LDFLAGS) $(__DEBUGinfo) $(__THREADSflg) -L$(LIBDIR) -Wl,--subsystem,windows -mwindows $(__WXLIB_CORE) $(__WXLIB_BASE)  $(__WXLIB_MONO) -lwxpng$(WXDEBUGflg) -lwxzlib$(WXDEBUGflg) -lkernel32 -luser32 -lgdi32 -lcomdlg32 -lwinspool -lwinmm -lshell32 -lshlwapi -lcomctl32 -lole32 -loleaut32 -luuid -ladvapi32 -lversion -loleacc -luxtheme -static-libgcc -static-libstdc++ -static -lpthread $(STRIP_FLAG)
+
+$(OBJS)/resfile.o: resfile.rc
+	windres --use-temp-file -i$< -o$@    --define __WXMSW__ $(__DEBUGdef1) $(__NDEBUGdef1) $(__EXCEPTIONSdef1) $(__RTTIdef1) $(__THREADdef1) $(__UNICODEdef1) --include-dir $(SETUPHDIR) --include-dir $(WXDIR)/include --include-dir . $(__DLLdef1)
+
+$(OBJS)/all.h.gch: all.h
+	$(CXX) -c -o $@ $(NMRFILIPGUI_CXXFLAGS) $(CPPDEPS) $<
+
+$(OBJS)/%.o: %.cpp $(__PCHPREREQ)
+	$(CXX) -c -o $@ $(NMRFILIPGUI_CXXFLAGS) $(__PCHINCLUDE) $(CPPDEPS) $<
+
+
+.PHONY: all clean
+
+
+SHELL := $(COMSPEC)
+
+-include $(OBJS)/*.d
